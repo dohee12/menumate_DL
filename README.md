@@ -1,58 +1,39 @@
-# MenuMate — 우루루 키오스크
+# MenuMate — 우루루 평촌본점 대화형 추천 키오스크
 
-말로 고르고, 이유와 함께 추천받는 세로형(1080×1920) 주문 키오스크입니다. React 19 + TypeScript + Vite로 만들었고, 개발 진입점은 **team-source/src/App.tsx**입니다.
+중식 80개 메뉴 앞에서 망설이는 손님이 **직원과 이야기하듯 말로 대화하며** 메뉴를 3개까지 좁히고, 웹캠으로 연령대를 판정해 **글자 크기와 음성 안내를 자동으로 맞추는** 키오스크입니다.
 
-## 실행
+기준 문서는 `docs/00_pm_decisions.md`, 에이전트 규칙은 `CLAUDE.md`입니다.
 
-| 목적 | 방법 |
-|---|---|
-| 전시 당일 | `start-exhibition.cmd` 더블클릭 → 빌드, (설정돼 있으면) AI 서버, 키오스크 화면, Edge 전체 화면이 차례로 켜집니다. 끝낼 때는 Edge에서 Alt+F4 |
-| 개발 | 루트에서 `npm run dev` → http://127.0.0.1:5173 (처음 한 번은 `npm run setup:client`). `start-react.cmd`도 같습니다 |
-| 검증 | 루트에서 `npm run build`, `npm test` |
+## 구성 (npm workspaces)
 
-## 화면과 기능
+| 폴더 | 역할 | 기술 |
+| --- | --- | --- |
+| `frontend/` | 키오스크 화면 (`src/kiosk-next/`), 우루루 메뉴·사진·리뷰 데이터 (`src/prototype/menu/`) | React 19 · TypeScript · Vite |
+| `backend/` | 메뉴·주문·결제(시뮬레이션) API, 대화(Gemini)·음성(Google TTS)·상황(날씨·시간대·혼잡도) API, 모델 파일 제공 | Fastify 5 · Prisma · SQLite |
+| `ai/` | 브라우저 안에서 도는 얼굴 검출·연령대 판정·불편 신호 (`@menumate/ai`) | MediaPipe · ONNX Runtime Web |
+| `docs/` | PM 결정, 아키텍처, 환경 변수, 공모전 문서 | |
 
-- **시작 화면**: "어떻게 주문하실 건가요?" — 메뉴 보고 주문 / 말로 추천 받아 주문
-- **메뉴판**: 11개 분류(가로로 밀기·끌기·휠), 초성 검색(화면 자판, 예: ㅉㅃ → 짬뽕), 카드 터치로 담기, 옵션 선택(굴소스/마늘소스 등), 품절 표시, ⓘ 설명 팝업
-- **말로 추천**: 눌러서 말하기(한 번 누르면 듣기 시작, 다 말하고 한 번 더 누르면 끝. 듣는 동안 들은 문장을 화면에 보여 주고, 20초가 지나면 스스로 끝냄) → "이렇게 이해했어요"에서 말한 문장의 어느 부분을 인원·예산·제외 재료·종류로 읽었는지 색으로 표시 → 버튼으로 수정 → 추천 3개(중국집처럼 요리+식사를 섞는 '중식 한상' 구성, 두 메뉴로 인원 나누기, 단품 · 예산·인분 반영)
-- **말로 주문**: "하가우 네 개 주세요"처럼 메뉴 이름과 개수
-- **결제와 영수증**: 주문하기 → 함께 드시면 좋아요(곁들임 제안) → 매장/포장 선택 → 카드·간편결제(전시에서는 카드 리더기 없이 버튼으로 진행) → 큰 주문 번호와 영수증 → QR로 휴대폰 영수증
-- **접근성**: '화면 설정'에서 글자 크게, 음성 안내(추천 결과·금액·주문 번호까지 읽어 줌), 고대비 화면, 낮은 화면(휠체어·어린이). '직원 호출 · 도움' 버튼으로 직원 호출
-- **카메라 화면 맞춤**: 시작 화면부터 웹캠으로 앞에 선 사람의 얼굴 나이대만 이 기기 안에서 추정합니다(얼굴 찾기·나이 추정 모델은 `public/models/face/`, 인터넷 불필요). 주문을 시작할 때 60세 이상으로 보이면 큰 글씨·음성 안내를, 12세 이하로 보이면 낮은 화면을 켜고 '원래대로' 버튼을 함께 보여 줍니다. 손님이 직접 설정을 바꿨으면 덮어쓰지 않습니다. 한 손님에 한 번만 정하고 카메라를 끄며(못 정하면 20초 뒤 끔), 처음 화면으로 돌아오면 다시 켭니다. 영상은 화면에 띄우지 않고 저장·전송하지 않으며, 켜져 있는 동안 위쪽에 '카메라 작동 중' 아이콘과 문구가 보입니다. 카메라가 없거나 막혀 있으면 이 기능만 조용히 빠집니다(화면 설정 창에 이유 표시)
-- **운영**: 60초 무입력 시 확인 팝업 → 20초 뒤 처음으로(큰 글씨·음성 안내도 끔). 완료 화면은 45초 뒤 처음으로
+## 빠른 시작
 
-## 전시 운영
+```bash
+npm ci
+npm run models:setup -w ai          # 얼굴·연령 모델 내려받기 (최초 1회)
+cp backend/.env.example backend/.env  # GEMINI_API_KEY, GOOGLE_TTS_API_KEY 입력
+cp frontend/.env.example frontend/.env
+npm run db:migrate -w backend && npm run db:seed -w backend
+npm run dev -w backend              # http://127.0.0.1:4000
+npm run dev -w frontend             # http://localhost:3000  (Chrome, 카메라·마이크 허용)
+```
 
-- **휴대폰 영수증(QR)**: 주문 내용을 QR 주소에 담아 서버 저장 없이 휴대폰에서 엽니다. QR은 Vercel에 올린 휴대폰 영수증 전용 페이지 **https://menumate-dl.vercel.app/receipt.html**`#<주문 코드>`로 연결됩니다(키오스크 코드를 불러오지 않는 가벼운 페이지, 2026-10-15에 GitHub Pages에서 옮김). 휴대폰 카메라가 잘 읽도록 주문 코드를 짧게 만들고(v2: `2~번호~시각~결제~메뉴들`, 메뉴 5개 주문도 QR 45×45칸 이하), QR을 크게(최대 340px)·흰 여백 4칸으로 그리며, 완료 화면에서 영수증보다 위에 둡니다. 영수증 화면을 고쳤으면 루트에서 `npm run deploy:vercel`로 다시 올리세요(Vercel 운영 배포, `DEPLOYMENT.md`). 예전 GitHub Pages 주소(`https://dohee12.github.io/menumate/receipt.html`)는 2026-10-15에 지웠습니다(`gh-pages` 브랜치 삭제, `npm run deploy:receipt` 제거). 다른 곳에 올렸다면 `team-source/.env.local`의 `VITE_RECEIPT_BASE_URL`에 그 `receipt.html` 주소를 넣습니다. 예전 주소 형식(`#/receipt/<v1 코드>`)도 계속 열립니다.
-- **설문**: `VITE_SURVEY_URL`에 구글 폼 등 주소를 넣으면 휴대폰 영수증 아래에 "30초 설문 참여하기" 버튼이 생깁니다.
-- **시연 모드**: 소음으로 음성 인식이 어려울 때 키보드 **Ctrl+Shift+1~4**를 누르면 준비된 문장이 말한 것처럼 들어갑니다. 말로 주문 화면에서는 주문 문장, 그 밖의 화면에서는 추천 문장입니다. 시연 기록은 통계에서 따로 셉니다.
-  - 추천: ① 두 명이고 새우는 빼고 딤섬 ② 네 명이서 1인당 3만원으로 안 매운 거 ③ 짬뽕, 돼지고기는 빼고 ④ 혼자, 만원 이하로 면 요리
-  - 주문: ① 하가우 두 개 ② 홍게살 소룡포 세 개 ③ 베이징덕 한 마리 ④ 원심 유니짜장 하나
-- **사용 통계**: 주소 뒤에 `#/stats`를 붙이면 체험 수, 주문 완료율, 평균 주문 시간, 추천·음성·큰 글씨 사용률을 보고 CSV로 내려받습니다. 이 기기 브라우저에만 저장되니 매일 내려받아 두세요.
-- **서버 AI 해석(선택)**: `team-source/server/.env`에 `LLM_API_BASE`, `LLM_API_KEY`, `LLM_MODEL`(OpenAI 호환)을 넣고, `team-source/.env.local`에 `VITE_API_BASE_URL=http://localhost:4000`을 넣습니다. LLM이 4초 안에 답하면 그 해석을 쓰고 "AI가 함께 해석했어요"가 표시됩니다. 키는 서버에만 둡니다. `start-exhibition.cmd`는 `server/.env`가 있을 때만 서버를 켭니다.
-- **오프라인**: 글꼴은 빌드에 포함됩니다. 브라우저 음성 인식은 인터넷이 필요해서, 끊기면 '메뉴판에서 직접 고르기'로 안내합니다. 카메라 화면 맞춤은 인터넷 없이 동작합니다.
-- **마이크·카메라 허용**: `start-exhibition.cmd`는 Edge를 `--use-fake-ui-for-media-stream`으로 켜서, 전체 화면 키오스크에서 허용 창 없이 실제 마이크·카메라를 씁니다.
+테스트는 워크스페이스마다 `npm test -w <ai|backend|frontend>`.
 
-## 주요 파일 (team-source/src/prototype/)
+## 배포
 
-| 파일 | 내용 |
-|---|---|
-| KioskApp.tsx | 화면 전환(이동 기록), 주문 상태, 자동 초기화, 음성 안내, 시연 모드 |
-| MenuCard.tsx · OrderList.tsx · Modal.tsx | 메뉴 카드, 하단 담은 메뉴, 팝업 |
-| InputPanel.tsx · media.ts | 눌러서 말하기(한 번 더 누르면 끝), 마이크·카메라 권한과 원인별 안내 |
-| faceAssist.ts | 카메라 화면 맞춤: 얼굴 나이대 추정(이 기기 안에서만), 큰 글씨·음성 안내·낮은 화면 판단 |
-| parse.ts | 문장에서 인원·예산(1인당/총)·제외 재료·개수·메뉴 이름 읽기, 해석 표시 구간 |
-| recommendation.ts · aiClient.ts | 추천 규칙, 서버 AI 해석 연결 |
-| Payment.tsx · Receipt.tsx · receiptLink.ts · ReceiptPage.tsx | 결제, 영수증, QR 주소, 휴대폰 영수증 화면 (휴대폰 전용 페이지 입구: `team-source/receipt.html`, `src/receipt-main.tsx`) |
-| usage.ts · StatsPage.tsx | 익명 사용 기록과 운영자 통계 화면 |
-| menu/menus.json · menu/image/ · menu/review/ | 메뉴 데이터(80개), 사진(파일 이름 = 메뉴 id, 예: dimsum-1.webp), 리뷰 자료 |
-| styles/overrides.css | 마지막에 불러와 옛 고정 크기 규칙을 덮어쓰는 화면 보정 |
+- 프론트: Vercel (`vercel.json`, `main` 브랜치)
+- 백엔드: Render (`render.yaml`, 무료 플랜 · SQLite 휘발성)
 
-`team-source/server/`는 Express + MySQL 백엔드입니다. 키오스크는 지금 조건 해석(`POST /api/condition-extraction`)만 씁니다. 서버 DB에 80개 메뉴를 넣으려면 `npm --prefix team-source/server run seed:build`로 `server/sql/seeds/ururu_menus.sql`을 만든 뒤 MySQL에 직접 실행합니다(통합 테스트 DB에는 넣지 마세요).
+자세한 환경 변수는 `docs/env-guide.md`, 구조는 `docs/architecture.md`.
 
-## 데이터 주의
+## 브랜치 규칙
 
-메뉴·가격은 우루루 메뉴판 기준입니다. 재료·맵기·인분은 메뉴 이름과 설명으로 추정한 값이라 매장 확인이 필요합니다.
-- 재료가 비어 있는 메뉴는 손님이 무언가를 빼 달라고 하면 추천하지 않습니다. 확인 후 표시할 재료가 없으면 `"ingredientsChecked": true`를 넣으세요.
-- 맵기 0은 '안 매움'과 '모름'이 섞여 있어서, 매장에서 확인한 메뉴에만 `"spicyChecked": true`를 넣으면 "안 매운 메뉴예요"라고 안내합니다.
-- 결제·매장 전송은 실제로 연결되지 않은 전시 체험용입니다.
+`main`에는 직접 커밋하지 않고 PR로만 합칩니다. 작업은 `AI` 브랜치에서 하고, push·PR 병합·배포는 사람이 직접 승인합니다 (`CLAUDE.md` 2번).

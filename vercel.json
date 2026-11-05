@@ -1,12 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "installCommand": "npm --prefix team-source ci",
-  "buildCommand": "npm run build",
-  "outputDirectory": "team-source/dist",
-  "build": {
-    "env": {
-      "VITE_RECEIPT_BASE_URL": "/receipt.html"
-    }
-  }
+  "installCommand": "npm ci --include=dev",
+  "buildCommand": "npm run build -w frontend",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    { "source": "/receipt.html", "destination": "/receipt.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
