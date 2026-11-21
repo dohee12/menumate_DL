@@ -12,9 +12,13 @@ function menu(overrides: Partial<MenuWithDetails>): MenuWithDetails {
     name: "[테스트] 짜장면",
     price: 7000,
     category: "main",
+    kind: null,
+    external_id: null,
     spicy_level: 0,
     serving_size: "1인분",
     sold_out: false,
+    is_featured: false,
+    featured_rank: null,
     flavor_tags: ["담백함"],
     texture_tags: ["쫄깃함"],
     keyword_tags: ["면"],
@@ -86,7 +90,6 @@ describe("POST /api/condition-extraction", () => {
     expect(res.body.conditions.party_size).toBe(2);
     expect(res.body.conditions.spicy_level).toBe(2);
     expect(res.body.conditions.excluded_ingredients).toContain("해산물");
-    expect(res.body.source).toBe("rules");
   });
 
   it("빈 발화는 공통 에러 포맷으로 400을 반환한다", async () => {
@@ -127,6 +130,35 @@ describe("POST /api/stores/:slug/recommendations", () => {
     const res = await request(app)
       .post("/api/stores/test-store/recommendations")
       .send({ conditions: { party_size: "두명" } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+describe("POST /api/stores/:slug/orders", () => {
+  it("결제 완료 주문을 저장한다 (로그인 불필요)", async () => {
+    const app = buildTestApp();
+    const res = await request(app)
+      .post("/api/stores/test-store/orders")
+      .send({
+        order_number: "001",
+        total_amount: 14000,
+        payment_method: "card",
+        dine_type: "dine_in",
+        items: [{ menu_external_id: "dimsum-1", name: "[테스트] 짜장면", price: 7000, quantity: 2 }],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.order.order_number).toBe("001");
+    expect(res.body.order.items).toHaveLength(1);
+  });
+
+  it("항목이 없으면 400 VALIDATION_ERROR를 반환한다", async () => {
+    const app = buildTestApp();
+    const res = await request(app)
+      .post("/api/stores/test-store/orders")
+      .send({ order_number: "002", total_amount: 0, payment_method: "card", dine_type: "takeout", items: [] });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");

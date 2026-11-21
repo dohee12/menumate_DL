@@ -119,6 +119,7 @@ function useTalk(kiosk: Kiosk) {
 
 export function Input({ kiosk }: { kiosk: Kiosk }) {
   const talk = useTalk(kiosk);
+  if (kiosk.state.chat.choice) return <MenuChoices kiosk={kiosk} talk={talk} />;
   if (!talk.talking) return <LegacyInput kiosk={kiosk} talk={talk} />;
   if (recommendLayout === 'board') return <ChatBoard kiosk={kiosk} talk={talk} />;
   if (recommendLayout === 'b') return <ChatB kiosk={kiosk} talk={talk} />;
@@ -299,6 +300,42 @@ function useDirectSpeech(talk: Talk) {
     setOpenedAt(userTurns);
   };
   return { on, open, close: () => setOpenedAt(null) };
+}
+
+// 손님이 "짜장면"처럼 말하면 나오는 화면: "짜장면은 두 가지 있어요." 한 줄과 그 아래 메뉴 카드.
+function MenuChoices({ kiosk, talk }: { kiosk: Kiosk; talk: Talk }) {
+  const { act, state, catalog } = kiosk;
+  const choice = state.chat.choice!;
+  const { speech } = talk;
+  const menus = choice.menuIds.map(id => catalog.get(id));
+  return (
+    <div className="kx-page kx-board" onPointerDown={talk.hush}>
+      <div className="kx-board-top">
+        <span className="kx-board-store">{STORE}</span>
+        <BoardStatus talk={talk} />
+      </div>
+      <h1 className="kx-menu-choice-line" aria-live="polite">{choice.line}</h1>
+      <div className={`kx-menu-choices${menus.length === 1 ? ' is-single' : ''}`}>
+        {menus.map(menu => {
+          const photo = catalog.photo(menu.id);
+          return (
+            <button key={menu.id} type="button" className="kx-menu-choice" disabled={menu.soldOut} onClick={() => act.chooseMenu(menu)}
+              aria-label={`${menu.name} ${money(menu.price)}${menu.soldOut ? ' 품절' : ' 담기'}`}>
+              {photo && <Photo className="kx-menu-choice-photo" src={photo} focus={catalog.focus(menu.id)} />}
+              <strong>{menu.name}</strong>
+              <span>{menu.soldOut ? '오늘 품절' : money(menu.price)}</span>
+            </button>
+          );
+        })}
+      </div>
+      {speech.heard && <p className="kx-board-me"><q className="is-interim">{speech.heard}</q></p>}
+      <p className="kx-board-allergy">알레르기 재료는 직원에게 확인해 주세요.</p>
+      <div className="kx-board-links">
+        <button type="button" onClick={act.declineMenus}>다른 메뉴 볼게요</button>
+        <button type="button" onClick={act.closeChoiceToMenu}>메뉴판에서 직접 고르기</button>
+      </div>
+    </div>
+  );
 }
 
 function ChatBoard({ kiosk, talk }: { kiosk: Kiosk; talk: Talk }) {

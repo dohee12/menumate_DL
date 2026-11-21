@@ -11,6 +11,7 @@ import * as Cart from './cart';
 import { defaultRecommender, type Recommender } from './recommender';
 import { createInitialState, lineOf, reducer, type SessionState } from './session';
 import { ACKS, GREETING, ackFor, wakeServer } from './chatClient';
+import { menuFromSpeech, menusForKeyword } from './keywords';
 import { chime, prefetchSpeech, speak, stopSpeaking } from './speech';
 import { useFaceSignals } from './useFaceSignals';
 import { money, type ChatTurn, type Conditions, type Dialog, type Menu, type PaymentResult, type PickReason, type Prefs, type Recommendation, type Screen } from './types';
@@ -195,12 +196,40 @@ export function useKiosk({ catalog = defaultCatalog, recommender = defaultRecomm
       return true;
     },
     chooseOption(menu: Menu, quantity: number, option: string) {
+      dispatch({ type: 'chat/choice', choice: null });
       addLines([lineOf(menu.id, quantity, option)]);
       say(`${menu.name}(${option}) ${quantity}개를 담았어요`);
       open(null);
       if (screen === 'input') act.go('menu');
     },
     confirmSpoken(menu: Menu, quantity: number) { if (act.pick(menu, quantity)) act.go('menu'); },
+    /** 손님 말에 메뉴 갈래가 있으면 카드를 띄웁니다. 띄웠으면 true. 빼 달라는 재료가 있으면 서버 검사를 거치도록 대화로 넘깁니다. */
+    offerMenus(text: string): boolean {
+      const said = text.trim();
+      if (state.conditions.exclude.length) return false;
+      const found = menusForKeyword(said, catalog.menus);
+      if (!found) return false;
+      const count = parseCount(said);
+      const quantity = count !== null && count >= 1 && count <= 20 ? count : 1;
+      dispatch({ type: 'chat/choice', choice: { said, line: found.line, menuIds: found.menus.map(m => m.id), quantity } });
+      if (state.mode !== 'recommend' || state.chat.failed) void speak(found.line);
+      return true;
+    },
+    /** 카드에서 고름: 담고 메뉴판으로 갑니다. 옵션이 있으면 옵션 팝업을 고른 뒤에 넘어갑니다. */
+    chooseMenu(menu: Menu) {
+      if (!act.pick(menu, state.chat.choice?.quantity ?? 1)) return;
+      dispatch({ type: 'chat/choice', choice: null });
+      act.go('menu');
+    },
+    /** 카드 중에 없음: 대화 중이면 직원 AI와 이어 갑니다 */
+    declineMenus() {
+      dispatch({ type: 'chat/choice', choice: null });
+      if (state.mode === 'recommend' && !state.chat.failed) act.chatSay('다른 메뉴도 보고 싶어요');
+    },
+    closeChoiceToMenu() {
+      dispatch({ type: 'chat/choice', choice: null });
+      act.go('menu');
+    },
     changeQuantity: (key: string, delta: number) => dispatch({ type: 'cart', change: cart => Cart.changeQuantity(cart, key, delta) }),
     removeLine: (key: string) => dispatch({ type: 'cart', change: cart => Cart.remove(cart, key) }),
     clearCart: () => dispatch({ type: 'cart', change: () => Cart.emptyCart }),
@@ -217,6 +246,13 @@ export function useKiosk({ catalog = defaultCatalog, recommender = defaultRecomm
 
     // 말로 추천 / 말로 주문
     submit(text: string) {
+      const { choice } = state.chat;
+      if (choice) {
+        const chosen = menuFromSpeech(text, choice.menuIds.map(id => catalog.get(id)));
+        if (chosen) return act.chooseMenu(chosen);
+        dispatch({ type: 'chat/choice', choice: null });
+      }
+      if (!state.chat.pending && act.offerMenus(text)) return;
       if (state.mode !== 'recommend') return act.orderBySpeech(text);
       if (state.chat.failed) return act.askRecommend(text);
       // 직원 AI가 생각하는 중에 이어 말하면 앞말과 합쳐 다시 보냅니다 (예전에는 여기서 확인 화면으로 새었음)

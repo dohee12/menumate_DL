@@ -157,7 +157,7 @@ describe('직원 AI 대화 (chat)', () => {
   it('처음으로 돌아가면 대화는 지워지고 상황(날씨)은 남는다', () => {
     const ctx = { timeOfDay: 'evening' as const, hour: 19, weather: null, crowd: 'low' as const, recentOrders: 0 };
     const s = run([{ type: 'chat/context', context: ctx }, { type: 'chat/user', text: '둘이요' }, { type: 'chat/assistant', reply }, { type: 'reset' }]);
-    expect(s.chat).toEqual({ turns: [], pending: false, failed: false, mood: null, picks: [], done: false, asking: null, pickReasons: [], heardSummary: null, partyAssumed: false, context: ctx });
+    expect(s.chat).toEqual({ turns: [], pending: false, failed: false, mood: null, picks: [], done: false, asking: null, pickReasons: [], heardSummary: null, partyAssumed: false, context: ctx, choice: null });
   });
   it('큰 글씨 제안은 손님 한 명당 한 번이고 처음으로 가면 풀린다', () => {
     const s = run([go('menu'), { type: 'comfort/asked' }]);

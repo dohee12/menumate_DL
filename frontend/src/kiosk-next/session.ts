@@ -20,8 +20,11 @@ export interface ChatState {
   heardSummary: string | null;
   partyAssumed: boolean;
   context: KioskContext | null;
+  /** 손님이 메뉴 갈래를 말해 카드로 고르는 중이면 그 내용 (keywords.ts) */
+  choice: MenuChoice | null;
 }
-const NO_CHAT: ChatState = { turns: [], pending: false, failed: false, mood: null, picks: [], done: false, asking: null, pickReasons: [], heardSummary: null, partyAssumed: false, context: null };
+export interface MenuChoice { said: string; line: string; menuIds: string[]; quantity: number }
+const NO_CHAT: ChatState = { turns: [], pending: false, failed: false, mood: null, picks: [], done: false, asking: null, pickReasons: [], heardSummary: null, partyAssumed: false, context: null, choice: null };
 
 export interface SessionState {
   screen: Screen;
@@ -73,6 +76,7 @@ export type Action =
   | { type: 'results'; results: Recommendation[] }
   | { type: 'ordered'; order: Order }
   | { type: 'message'; text: string }
+  | { type: 'chat/choice'; choice: MenuChoice | null }
   | { type: 'dialog'; dialog: Dialog | null }
   | { type: 'staff-called' }
   | { type: 'chat/context'; context: KioskContext | null }
@@ -180,6 +184,14 @@ export function reducer(state: SessionState, action: Action): SessionState {
       return { ...state, dialog: action.dialog, ...(action.dialog?.kind === 'help' ? { staffCalled: false } : {}) };
     case 'staff-called':
       return { ...state, staffCalled: true };
+    case 'chat/choice': {
+      const { choice } = action;
+      if (!choice) return { ...state, chat: { ...state.chat, choice: null } };
+      // 대화 중이면 AI가 앞뒤를 알도록 손님 말과 안내 문장을 대화 기록에도 남깁니다. 안내 문장은 평소 답변처럼 읽힙니다.
+      if (state.mode !== 'recommend' || state.chat.failed) return { ...state, chat: { ...state.chat, choice } };
+      const turns = [...state.chat.turns, { role: 'user' as const, text: choice.said }, { role: 'assistant' as const, text: choice.line }];
+      return { ...state, chat: { ...state.chat, turns, pending: false, asking: null, choice }, conditions: { ...state.conditions, raw: [state.conditions.raw, choice.said].filter(Boolean).join(' ') } };
+    }
     case 'chat/context':
       return { ...state, chat: { ...state.chat, context: action.context } };
     case 'chat/user': {
@@ -187,7 +199,7 @@ export function reducer(state: SessionState, action: Action): SessionState {
       if (!text) return state;
       // 손님이 말한 문장들을 이어 붙여 두면(raw), 메뉴 이름 언급 가점과 '이렇게 이해했어요' 표시에 그대로 쓸 수 있습니다.
       const raw = [state.conditions.raw, text].filter(Boolean).join(' ');
-      return { ...state, chat: { ...state.chat, turns: [...state.chat.turns, { role: 'user', text }], pending: true }, conditions: { ...state.conditions, raw } };
+      return { ...state, chat: { ...state.chat, turns: [...state.chat.turns, { role: 'user', text }], pending: true, choice: null }, conditions: { ...state.conditions, raw } };
     }
     case 'chat/greet':
       return { ...state, chat: { ...state.chat, turns: [{ role: 'assistant', text: action.text }], pending: false, failed: false, asking: 'party' } };

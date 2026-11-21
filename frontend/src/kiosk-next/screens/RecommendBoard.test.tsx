@@ -230,9 +230,9 @@ describe('직접 말할게요 (버튼 답이 안 맞을 때 자기 말로)', () 
     await user.click(screen.getByRole('button', { name: '직접 말할게요' }));
     // 핸즈프리가 손님 말을 넘기는 것을 흉내 냅니다: useSpeechInput 에 넘긴 onResult(= act.submit)를 직접 부름
     const submit = vi.mocked(useSpeechInputMock).mock.calls.at(-1)![0];
-    act(() => submit('짜장 두 개요'));
+    act(() => submit('둘이 왔어요'));
     expect(screen.queryByRole('status', { name: '직접 말하기' })).not.toBeInTheDocument();
-    expect(screen.getByText('짜장 두 개요', { selector: '.kx-board-me q' })).toBeInTheDocument();
+    expect(screen.getByText('둘이 왔어요', { selector: '.kx-board-me q' })).toBeInTheDocument();
   });
 });
 
@@ -313,5 +313,42 @@ describe('주문 확인 보드 · 추천 결과', () => {
     expect(await screen.findByText('현재 조건에 맞는 조합이 없어요. 조건을 수정해 주세요.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '직원에게 물어보기' })).not.toBeInTheDocument();
     expect(voice.spoken.at(-1)).toBe('조건에 맞는 메뉴가 없어요. 조건을 바꿔 주세요.');
+  });
+});
+
+describe('메뉴 갈래를 말하면 한 줄 안내와 카드를 보여 준다', () => {
+  const NOODLES = createCatalog([menu('j1', '원심 유니짜장', 8000), menu('j2', '블랙 이베리코 간짜장', 15000), menu('r1', '새우볶음밥', 11000)]);
+  async function sayJajang(replies: ChatReply[] = []) {
+    const server = fakeServer(replies);
+    const user = userEvent.setup();
+    render(<KioskNext catalog={NOODLES} recommender={server.recommender} />);
+    await user.click(screen.getByRole('button', { name: /말로 추천 받아 주문/ }));
+    await user.click(screen.getByRole('button', { name: '말로 추천받기 시작' }));
+    const submit = vi.mocked(useSpeechInputMock).mock.calls.at(-1)![0];
+    act(() => submit('짜장면'));
+    return { user, server };
+  }
+
+  it('서버에 묻지 않고 안내 한 줄 아래에 카드를 띄운다', async () => {
+    const { server } = await sayJajang();
+    expect(screen.getByRole('heading', { name: '짜장면은 두 가지 있어요.' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '원심 유니짜장 8,000원 담기' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '블랙 이베리코 간짜장 15,000원 담기' })).toBeInTheDocument();
+    expect(server.sent).toEqual([]);
+    expect(voice.spoken.at(-1)).toBe('짜장면은 두 가지 있어요.');
+  });
+
+  it('카드를 누르면 담고 메뉴판으로 간다', async () => {
+    const { user } = await sayJajang();
+    await user.click(screen.getByRole('button', { name: '블랙 이베리코 간짜장 15,000원 담기' }));
+    expect(screen.queryByRole('button', { name: '다른 메뉴 볼게요' })).not.toBeInTheDocument();
+    expect(screen.getByText(/블랙 이베리코 간짜장 1개를 담았어요/)).toBeInTheDocument();
+  });
+
+  it('다른 메뉴를 보겠다고 하면 직원 AI 대화로 이어 간다', async () => {
+    const { user, server } = await sayJajang([reply({ reply: '몇 분이서 오셨어요?', asking: 'party' })]);
+    await user.click(screen.getByRole('button', { name: '다른 메뉴 볼게요' }));
+    expect(server.sent).toEqual(['다른 메뉴도 보고 싶어요']);
+    expect(await screen.findByText(/몇 분이서 오셨어요/, { selector: '.kx-board-staff' })).toBeInTheDocument();
   });
 });
